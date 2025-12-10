@@ -1,0 +1,265 @@
+@app "Prism Home"
+@version 1
+
+-- Welcome to Prism Browser --
+
+state {
+  selected_demo: ""
+}
+
+view {
+  column {
+    padding: 0
+    gap: 0
+
+    -- Hero Section --
+    box {
+      padding: 40
+      background: #4285F4
+
+      column {
+        gap: 16
+
+        text "Welcome to Prism" {
+          size: 36
+          color: #FFFFFF
+        }
+
+        text "A new kind of web platform" {
+          size: 18
+          color: #BBDEFB
+        }
+
+        text "Fast. Private. Simple." {
+          size: 14
+          color: #90CAF9
+        }
+      }
+    }
+
+    -- Quick Start --
+    box {
+      padding: 24
+      background: #FFFFFF
+
+      column {
+        gap: 16
+
+        text "Quick Start" {
+          size: 24
+          color: #333333
+        }
+
+        text "Try these example applications:" {
+          size: 14
+          color: #666666
+        }
+
+        column {
+          gap: 12
+
+          link "Counter App - A simple increment/decrement demo" {
+            href: "examples/counter.prism"
+            size: 14
+          }
+
+          link "Todo App - A full task management application" {
+            href: "examples/todo.prism"
+            size: 14
+          }
+
+          link "Layout Demo - Header, content, and footer layout" {
+            href: "examples/layout.prism"
+            size: 14
+          }
+
+          link "Interactive Demo - Input binding and state updates" {
+            href: "examples/interactive.prism"
+            size: 14
+          }
+        }
+      }
+    }
+
+    -- Features Section --
+    box {
+      padding: 24
+      background: #FAFAFA
+
+      column {
+        gap: 20
+
+        text "Why Prism?" {
+          size: 24
+          color: #333333
+        }
+
+        grid {
+          columns: 2
+          gap: 16
+
+          box {
+            padding: 16
+            background: #FFFFFF
+
+            column {
+              gap: 8
+
+              text "No Build Step" {
+                size: 16
+                color: #1976D2
+              }
+
+              text "Write .prism files and run them directly. No bundlers, no transpilers, no waiting." {
+                size: 12
+                color: #666666
+              }
+            }
+          }
+
+          box {
+            padding: 16
+            background: #FFFFFF
+
+            column {
+              gap: 8
+
+              text "Privacy First" {
+                size: 16
+                color: #388E3C
+              }
+
+              text "No cookies, no tracking, no persistent storage. Your data stays yours." {
+                size: 12
+                color: #666666
+              }
+            }
+          }
+
+          box {
+            padding: 16
+            background: #FFFFFF
+
+            column {
+              gap: 8
+
+              text "Declarative UI" {
+                size: 16
+                color: #F57C00
+              }
+
+              text "State, view, and actions in one file. Reactive updates happen automatically." {
+                size: 12
+                color: #666666
+              }
+            }
+          }
+
+          box {
+            padding: 16
+            background: #FFFFFF
+
+            column {
+              gap: 8
+
+              text "Minimal Runtime" {
+                size: 16
+                color: #C2185B
+              }
+
+              text "The entire browser is under 2000 lines of Rust. Fast startup, tiny memory footprint." {
+                size: 12
+                color: #666666
+              }
+            }
+          }
+        }
+      }
+    }
+
+    -- Tutorial Section --
+    box {
+      padding: 24
+      background: #FFFFFF
+
+      column {
+        gap: 16
+
+        text "Getting Started" {
+          size: 24
+          color: #333333
+        }
+
+        text "1. Create a new .prism file" {
+          size: 14
+          color: #333333
+        }
+
+        text "2. Define your state, view, and actions" {
+          size: 14
+          color: #333333
+        }
+
+        text "3. Run with: prism yourfile.prism" {
+          size: 14
+          color: #333333
+        }
+
+        divider {}
+
+        text "Example:" {
+          size: 14
+          color: #666666
+        }
+
+        box {
+          padding: 16
+          background: #F5F5F5
+
+          column {
+            gap: 4
+
+            text "@app \"Hello World\"" {
+              size: 12
+              color: #333333
+            }
+
+            text "state { message: \"Hello!\" }" {
+              size: 12
+              color: #333333
+            }
+
+            text "view { text \"{message}\" }" {
+              size: 12
+              color: #333333
+            }
+          }
+        }
+      }
+    }
+
+    -- Footer --
+    box {
+      padding: 20
+      background: #37474F
+
+      column {
+        gap: 8
+
+        text "Prism Browser v0.1.0" {
+          size: 14
+          color: #FFFFFF
+        }
+
+        text "Built with Rust. Open source." {
+          size: 12
+          color: #B0BEC5
+        }
+      }
+    }
+  }
+}
+
+actions {
+  -- Navigation is handled by link hrefs --
+}

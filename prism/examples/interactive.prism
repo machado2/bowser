@@ -1,0 +1,121 @@
+@app "Interactive Demo"
+@version 1
+
+-- Demonstrates input binding and conditional visibility --
+
+state {
+  name: ""
+  show_greeting: false
+  click_count: 0
+}
+
+view {
+  column {
+    padding: 40
+    gap: 24
+    
+    text "Interactive Prism Demo" {
+      size: 24
+      color: #333333
+    }
+    
+    -- Input Section --
+    column {
+      padding: 20
+      gap: 12
+      background: #F8F9FA
+      
+      text "Enter your name:" {
+        size: 14
+        color: #666666
+      }
+      
+      input {
+        placeholder: "Type your name here..."
+        bind: name
+      }
+      
+      button "Show Greeting" {
+        on_click: show_message
+        background: #4285F4
+        color: #FFFFFF
+      }
+      
+      text "Hello, {name}! Welcome to Prism." {
+        size: 18
+        color: #34A853
+        visible: show_greeting
+      }
+    }
+    
+    -- Click Counter Section --
+    column {
+      padding: 20
+      gap: 12
+      background: #FFF3E0
+      
+      text "Click Counter" {
+        size: 16
+        color: #E65100
+      }
+      
+      row {
+        gap: 16
+        
+        button "Click Me!" {
+          on_click: do_click
+          background: #FF9800
+          color: #FFFFFF
+        }
+        
+        text "Clicked {click_count} times" {
+          size: 14
+          color: #666666
+        }
+      }
+      
+      text "You're a clicking champion!" {
+        size: 14
+        color: #4CAF50
+        visible: click_count > 10
+      }
+    }
+    
+    -- Reset Section --
+    row {
+      gap: 12
+      
+      button "Reset All" {
+        on_click: reset
+        background: #F44336
+        color: #FFFFFF
+      }
+      
+      button "Hide Greeting" {
+        on_click: hide_message
+        background: #9E9E9E
+        color: #FFFFFF
+      }
+    }
+  }
+}
+
+actions {
+  show_message {
+    show_greeting: true
+  }
+  
+  hide_message {
+    show_greeting: false
+  }
+  
+  do_click {
+    click_count: click_count + 1
+  }
+  
+  reset {
+    name: ""
+    show_greeting: false
+    click_count: 0
+  }
+}

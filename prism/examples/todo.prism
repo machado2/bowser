@@ -1,0 +1,185 @@
+@app "Todo Application"
+@version 1
+
+-- A full-featured Todo application demonstrating Prism's capabilities --
+
+state {
+  tasks: []
+  new_task: ""
+  filter: "all"
+  completed_count: 0
+  total_count: 0
+}
+
+view {
+  column {
+    padding: 0
+    gap: 0
+
+    -- Header --
+    box {
+      padding: 24
+      background: #4285F4
+
+      column {
+        gap: 8
+
+        text "Todo List" {
+          size: 28
+          color: #FFFFFF
+        }
+
+        text "Organize your tasks efficiently" {
+          size: 14
+          color: #BBDEFB
+        }
+      }
+    }
+
+    -- Input Section --
+    box {
+      padding: 20
+      background: #F5F5F5
+
+      row {
+        gap: 12
+
+        input {
+          placeholder: "What needs to be done?"
+          bind: new_task
+        }
+
+        button "Add Task" {
+          on_click: add_task
+          background: #4CAF50
+          color: #FFFFFF
+        }
+      }
+    }
+
+    -- Filter Buttons --
+    box {
+      padding: 16
+      background: #FFFFFF
+
+      row {
+        gap: 12
+
+        button "All" {
+          on_click: filter_all
+          background: #E3F2FD
+          color: #1976D2
+        }
+
+        button "Active" {
+          on_click: filter_active
+          background: #E8F5E9
+          color: #388E3C
+        }
+
+        button "Completed" {
+          on_click: filter_completed
+          background: #FFF3E0
+          color: #F57C00
+        }
+
+        button "Clear" {
+          on_click: clear_completed
+          background: #FFEBEE
+          color: #D32F2F
+        }
+      }
+    }
+
+    -- Task List --
+    box {
+      padding: 20
+
+      column {
+        gap: 8
+
+        text "Your Tasks" {
+          size: 18
+          color: #333333
+        }
+
+        text "{total_count} total, {completed_count} completed" {
+          size: 12
+          color: #666666
+        }
+
+        divider {}
+
+        -- Task items would be rendered here via 'each' --
+        text "Tasks will appear here..." {
+          size: 14
+          color: #999999
+          visible: total_count == 0
+        }
+      }
+    }
+
+    -- Stats Card --
+    box {
+      padding: 20
+      background: #FAFAFA
+
+      column {
+        gap: 12
+
+        text "Progress" {
+          size: 18
+          color: #333333
+        }
+
+        progress {
+          value: completed_count
+          max: total_count
+        }
+
+        text "{completed_count} of {total_count} tasks completed" {
+          size: 14
+          color: #666666
+        }
+      }
+    }
+
+    -- Footer --
+    box {
+      padding: 16
+      background: #FAFAFA
+
+      text "Double-click a task to edit. Press Enter to save." {
+        size: 12
+        color: #999999
+      }
+    }
+  }
+}
+
+actions {
+  add_task {
+    total_count: total_count + 1
+    new_task: ""
+  }
+
+  filter_all {
+    filter: "all"
+  }
+
+  filter_active {
+    filter: "active"
+  }
+
+  filter_completed {
+    filter: "completed"
+  }
+
+  clear_completed {
+    completed_count: 0
+  }
+
+  toggle_task {
+    completed_count: completed_count + 1
+  }
+}

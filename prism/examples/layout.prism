@@ -1,0 +1,141 @@
+@app "Layout Demo"
+@version 1
+
+-- Demonstrates header, content, footer layout --
+
+state {
+  page: "home"
+  dark_mode: false
+}
+
+view {
+  column {
+    padding: 0
+    gap: 0
+    
+    -- Header --
+    row {
+      padding: 16
+      gap: 20
+      background: #4285F4
+      
+      text "Prism App" {
+        size: 20
+        color: #FFFFFF
+      }
+      
+      button "Home" {
+        on_click: go_home
+        background: #5C9AFF
+        color: #FFFFFF
+      }
+      
+      button "About" {
+        on_click: go_about
+        background: #5C9AFF
+        color: #FFFFFF
+      }
+      
+      button "Toggle Theme" {
+        on_click: toggle_theme
+        background: #5C9AFF
+        color: #FFFFFF
+      }
+    }
+    
+    -- Main Content --
+    column {
+      padding: 32
+      gap: 16
+      
+      text "Welcome to Prism" {
+        size: 24
+        color: #333333
+      }
+      
+      text "This demonstrates a classic Header-Content-Footer layout." {
+        size: 14
+        color: #666666
+      }
+      
+      text "No frameworks. No build tools. Just text." {
+        size: 14
+        color: #666666
+      }
+      
+      row {
+        gap: 16
+        
+        column {
+          padding: 16
+          background: #F5F5F5
+          
+          text "Feature 1" {
+            size: 16
+            color: #333333
+          }
+          
+          text "Reactive state" {
+            size: 12
+            color: #666666
+          }
+        }
+        
+        column {
+          padding: 16
+          background: #F5F5F5
+          
+          text "Feature 2" {
+            size: 16
+            color: #333333
+          }
+          
+          text "Sandboxed runtime" {
+            size: 12
+            color: #666666
+          }
+        }
+        
+        column {
+          padding: 16
+          background: #F5F5F5
+          
+          text "Feature 3" {
+            size: 16
+            color: #333333
+          }
+          
+          text "Zero dependencies" {
+            size: 12
+            color: #666666
+          }
+        }
+      }
+    }
+    
+    -- Footer --
+    row {
+      padding: 16
+      background: #333333
+      
+      text "© 2024 Prism Project - Public Domain" {
+        size: 12
+        color: #AAAAAA
+      }
+    }
+  }
+}
+
+actions {
+  go_home {
+    page: "home"
+  }
+  
+  go_about {
+    page: "about"
+  }
+  
+  toggle_theme {
+    dark_mode: dark_mode == false
+  }
+}

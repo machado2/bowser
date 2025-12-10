@@ -1,0 +1,59 @@
+@app "Counter Demo"
+@version 1
+
+-- A simple counter demonstrating state and actions --
+
+state {
+  count: 0
+}
+
+view {
+  column {
+    padding: 40
+    gap: 20
+    
+    text "Prism Counter" {
+      size: 28
+      color: #333333
+    }
+    
+    text "A minimal reactive UI" {
+      size: 14
+      color: #666666
+    }
+    
+    row {
+      gap: 12
+      
+      button "−" {
+        on_click: decrement
+        background: #E0E0E0
+      }
+      
+      text "{count}" {
+        size: 32
+        color: #4285F4
+      }
+      
+      button "+" {
+        on_click: increment
+        background: #E0E0E0
+      }
+    }
+    
+    text "Click the buttons to change the count" {
+      size: 12
+      color: #999999
+    }
+  }
+}
+
+actions {
+  increment {
+    count: count + 1
+  }
+  
+  decrement {
+    count: count - 1
+  }
+}

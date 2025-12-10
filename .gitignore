@@ -1,0 +1,28 @@
+# Rust / Cargo
+/target/
+**/target/
+Cargo.lock
+
+# Build artifacts
+*.rlib
+*.rmeta
+
+# IDE / editor
+/.idea/
+/.vscode/
+*.iml
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Rust coverage / tools
+/coverage/
+.profraw
+
+# Misc
+*.swp
+*.swo

@@ -1,0 +1,25 @@
+[package]
+name = "prism"
+version = "0.1.0"
+edition = "2021"
+description = "A minimal, sandboxed viewer for the Prism web format"
+authors = ["Prism Foundation"]
+
+[dependencies]
+# Windowing and input
+winit = "0.28"
+softbuffer = "0.3.4"
+# Fast text rendering
+fontdue = "0.9"
+# HTTP client for networked Prism apps
+reqwest = { version = "0.11", default-features = false, features = ["blocking", "rustls-tls"] }
+
+[profile.release]
+opt-level = "z"     # Optimize for size
+lto = true          # Link-time optimization
+codegen-units = 1   # Better optimization
+
+strip = true        # Strip symbols
+
+[build-dependencies]
+embed-manifest = "1.5.0"
