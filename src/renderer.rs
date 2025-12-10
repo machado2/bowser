@@ -102,13 +102,13 @@ impl FrameBuffer {
         let idx = y * self.width + x;
         let bg = self.pixels[idx];
 
-        let bg_r = ((bg >> 16) & 0xFF) as u32;
-        let bg_g = ((bg >> 8) & 0xFF) as u32;
-        let bg_b = (bg & 0xFF) as u32;
+        let bg_r = (bg >> 16) & 0xFF;
+        let bg_g = (bg >> 8) & 0xFF;
+        let bg_b = bg & 0xFF;
 
-        let fg_r = ((color >> 16) & 0xFF) as u32;
-        let fg_g = ((color >> 8) & 0xFF) as u32;
-        let fg_b = (color & 0xFF) as u32;
+        let fg_r = (color >> 16) & 0xFF;
+        let fg_g = (color >> 8) & 0xFF;
+        let fg_b = color & 0xFF;
 
         let a = alpha as u32;
         let inv_a = 255 - a;
@@ -120,6 +120,7 @@ impl FrameBuffer {
         self.pixels[idx] = (r << 16) | (g << 8) | b;
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn fill_rounded_rect_vertical_gradient(&mut self, x: i32, y: i32, w: u32, h: u32, radius: u32, top_color: u32, bottom_color: u32) {
         if w == 0 || h == 0 {
             return;
@@ -726,7 +727,7 @@ impl Renderer {
             return;
         }
 
-        let rows = (visible.len() + cols - 1) / cols;
+        let rows = visible.len().div_ceil(cols);
         let cell_width = (ctx.width - gap * (cols as u32 - 1)) / cols as u32;
         let cell_height = (ctx.height - gap * (rows as u32 - 1)) / rows as u32;
 
@@ -749,8 +750,8 @@ impl Renderer {
             let centered = RenderContext {
                 x: ctx.x + ((ctx.width as i32 - cw as i32) / 2).max(0),
                 y: ctx.y,
-                width: cw.max(0),
-                height: ch.max(0),
+                width: cw,
+                height: ch,
             };
             self.render_node(fb, child, state, &centered);
         }
@@ -1185,16 +1186,10 @@ impl Renderer {
 
     /// Find what was clicked at given coordinates
     pub fn hit_test(&self, x: i32, y: i32) -> Option<&LayoutBox> {
-        for layout_box in &self.layout_boxes {
-            if x >= layout_box.x
+        self.layout_boxes.iter().find(|&layout_box| x >= layout_box.x
                 && x < layout_box.x + layout_box.width as i32
                 && y >= layout_box.y
-                && y < layout_box.y + layout_box.height as i32
-            {
-                return Some(layout_box);
-            }
-        }
-        None
+                && y < layout_box.y + layout_box.height as i32).map(|v| v as _)
     }
 
     /// Rough measurement for node size to drive layout without overlapping
@@ -1255,7 +1250,7 @@ impl Renderer {
                 if child_sizes.is_empty() {
                     return (0, 0);
                 }
-                let rows = (child_sizes.len() + cols - 1) / cols;
+                let rows = child_sizes.len().div_ceil(cols);
                 let max_w = child_sizes.iter().map(|(w, _)| *w).max().unwrap_or(0);
                 let max_h = child_sizes.iter().map(|(_, h)| *h).max().unwrap_or(0);
                 let total_w = max_w * cols as u32 + gap * (cols.saturating_sub(1) as u32) + padding * 2;

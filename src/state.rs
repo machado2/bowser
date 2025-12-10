@@ -232,9 +232,9 @@ impl StateStore {
             
             Expression::Pipe { value, transform: _ } => {
                 // Pipe passes value to transform
-                let val = self.evaluate(value);
+                
                 // For now, treat as identity - full implementation would substitute
-                val
+                self.evaluate(value)
             }
         }
     }
@@ -409,7 +409,7 @@ impl StateStore {
             }).unwrap_or(Value::List(vec![])),
             
             // JSON
-            "json_encode" => args.first().map(|v| Value::String(self.to_json(v))).unwrap_or(Value::Null),
+            "json_encode" => args.first().map(|v| Value::String(Self::to_json(v))).unwrap_or(Value::Null),
             
             _ => Value::Null,
         }
@@ -479,7 +479,7 @@ impl StateStore {
                 if current_len >= len {
                     Value::String(s.clone())
                 } else {
-                    let padding: String = std::iter::repeat(pad_char).take(len - current_len).collect();
+                    let padding: String = std::iter::repeat_n(pad_char, len - current_len).collect();
                     Value::String(format!("{}{}", padding, s))
                 }
             }
@@ -491,7 +491,7 @@ impl StateStore {
                 if current_len >= len {
                     Value::String(s.clone())
                 } else {
-                    let padding: String = std::iter::repeat(pad_char).take(len - current_len).collect();
+                    let padding: String = std::iter::repeat_n(pad_char, len - current_len).collect();
                     Value::String(format!("{}{}", s, padding))
                 }
             }
@@ -615,7 +615,7 @@ impl StateStore {
     }
 
     /// Convert value to JSON-like string
-    fn to_json(&self, value: &Value) -> String {
+    fn to_json(value: &Value) -> String {
         match value {
             Value::Null => "null".to_string(),
             Value::Bool(b) => b.to_string(),
@@ -623,12 +623,12 @@ impl StateStore {
             Value::Float(f) => f.to_string(),
             Value::String(s) => format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"")),
             Value::List(items) => {
-                let strs: Vec<String> = items.iter().map(|v| self.to_json(v)).collect();
+                let strs: Vec<String> = items.iter().map(Self::to_json).collect();
                 format!("[{}]", strs.join(","))
             }
             Value::Object(obj) => {
                 let pairs: Vec<String> = obj.iter()
-                    .map(|(k, v)| format!("\"{}\":{}", k, self.to_json(v)))
+                    .map(|(k, v)| format!("\"{}\":{}", k, Self::to_json(v)))
                     .collect();
                 format!("{{{}}}", pairs.join(","))
             }

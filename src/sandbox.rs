@@ -13,7 +13,7 @@ use std::path::Path;
 pub const MEMORY_LIMIT_BYTES: usize = 16 * 1024 * 1024;
 
 /// Maximum file size that can be loaded (1MB)
-pub const MAX_FILE_SIZE_BYTES: usize = 1 * 1024 * 1024;
+pub const MAX_FILE_SIZE_BYTES: usize = 1024 * 1024;
 
 /// Sandbox configuration
 pub struct Sandbox {

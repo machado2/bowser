@@ -230,14 +230,13 @@ impl Browser {
         println!("Loaded: {} (v{})", app.name, app.version);
 
         // Update history
-        if update_history {
-            if self.history.is_empty() || self.history[self.history_index] != path_str {
+        if update_history
+            && (self.history.is_empty() || self.history[self.history_index] != path_str) {
                 // Truncate forward history if navigating from middle
                 self.history.truncate(self.history_index + 1);
                 self.history.push(path_str.clone());
                 self.history_index = self.history.len() - 1;
             }
-        }
 
         self.current_path = path_str.clone();
         self.address_text = path_str.clone();
@@ -316,13 +315,12 @@ impl Browser {
 
         println!("Loaded: {} (v{})", app.name, app.version);
 
-        if update_history {
-            if self.history.is_empty() || self.history[self.history_index] != url_str {
+        if update_history
+            && (self.history.is_empty() || self.history[self.history_index] != url_str) {
                 self.history.truncate(self.history_index + 1);
                 self.history.push(url_str.clone());
                 self.history_index = self.history.len() - 1;
             }
-        }
 
         self.current_path = url_str.clone();
         self.address_text = url_str.clone();
@@ -435,8 +433,8 @@ fn main() {
                     let (mx, my) = (position.x as i32, position.y as i32);
                     let mut hand = false;
                     if my < CHROME_HEIGHT as i32 {
-                        if (mx >= 10 && mx <= 38 && my >= 12 && my <= 40 && browser.can_go_back()) ||
-                           (mx >= 45 && mx <= 73 && my >= 12 && my <= 40 && browser.can_go_forward()) {
+                        if ((10..=38).contains(&mx) && (12..=40).contains(&my) && browser.can_go_back()) ||
+                           ((45..=73).contains(&mx) && (12..=40).contains(&my) && browser.can_go_forward()) {
                             hand = true;
                         }
                     } else if let Some(ref mut rt) = browser.runtime {
@@ -494,11 +492,10 @@ fn main() {
                     }
                 }
                 WindowEvent::KeyboardInput { input, .. } => {
-                    if input.state == ElementState::Pressed {
-                        if handle_key_input(&mut browser, &input, modifiers) {
+                    if input.state == ElementState::Pressed
+                        && handle_key_input(&mut browser, &input, modifiers) {
                             needs_redraw = true;
                         }
-                    }
                 }
                 WindowEvent::ReceivedCharacter(ch) => {
                     if handle_received_char(&mut browser, ch) {
@@ -788,11 +785,11 @@ fn alpha_blend(dst: u32, src: u32, alpha: u8) -> u32 {
 }
 
 fn handle_chrome_click(browser: &mut Browser, x: i32, _y: i32, _width: usize) {
-    if x >= 10 && x < 38 {
+    if (10..38).contains(&x) {
         browser.go_back();
         return;
     }
-    if x >= 45 && x < 73 {
+    if (45..73).contains(&x) {
         browser.go_forward();
         return;
     }
