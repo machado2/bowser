@@ -140,13 +140,12 @@ actions {
 
 ### Prerequisites
 
-- Rust 1.70+ (`rustup` to install)
+- Rust (stable recommended). Install via `rustup`.
 
 ### Build the Prism Viewer
 
 ```bash
-cd prism
-cargo build --release
+cargo build
 ```
 
 ### Run a Prism Application
@@ -155,10 +154,21 @@ cargo build --release
 cargo run -- examples/counter.prism
 ```
 
-Or after building:
+Other examples:
+
+- `cargo run -- examples/home.prism`
+- `cargo run -- examples/layout.prism`
+- `cargo run -- examples/interactive.prism`
+- `cargo run -- examples/todo.prism`
+
+### CLI Options
+
+- `--layout-log <file.prism>`: prints a layout report and exits. Useful for debugging sizing/centering.
+
+Example:
 
 ```bash
-./target/release/prism examples/counter.prism
+cargo run -- --layout-log examples/counter.prism
 ```
 
 ---
@@ -168,14 +178,17 @@ Or after building:
 ```
 prism/
 ├── src/
-│   ├── main.rs           # Entry point, window creation
+│   ├── main.rs           # Entry point, window + chrome + event loop
 │   ├── parser.rs         # .prism format parser
 │   ├── ast.rs            # Abstract Syntax Tree definitions
 │   ├── state.rs          # Reactive state management
-│   ├── renderer.rs       # Virtual tree to pixels
+│   ├── renderer.rs       # Layout + rendering to framebuffer
 │   ├── sandbox.rs        # Security restrictions
-│   ├── expression.rs     # Expression evaluator for bindings
-│   └── runtime.rs        # Event loop, orchestration
+│   └── runtime.rs        # Orchestration (render, invalidate, content height)
+├── assets/               # UI font + optional icons
+│   ├── Inter-Regular.ttf
+│   ├── icon_back.svg
+│   └── icon_forward.svg
 ├── examples/
 │   ├── counter.prism     # Simple counter demo
 │   ├── todo.prism        # Todo list demo
@@ -185,6 +198,13 @@ prism/
 ```
 
 ---
+
+## UI & Controls
+
+- Toolbar: back (`‹`) and forward (`›`) buttons, an address bar for opening files.
+- Hover feedback: cursor changes to a hand when over links or buttons.
+- Buttons: rounded, centered glyphs; neutral background by default.
+- Links: baseline-aligned underline and accurate hit target.
 
 ## The Future
 
