@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Security sandbox for Prism applications
 //!
 //! The sandbox enforces strict isolation:

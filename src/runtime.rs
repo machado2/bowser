@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Runtime orchestration for Prism applications
 //!
 //! The runtime manages the event loop, state updates, and re-rendering.
@@ -43,14 +44,19 @@ impl Runtime {
     }
 
     /// Render the current state to a frame buffer
-    pub fn render(&mut self, fb: &mut FrameBuffer) {
-        self.renderer.render(fb, &self.app.view, &self.state);
+    pub fn render(&mut self, fb: &mut FrameBuffer, scroll_y: i32) {
+        self.renderer.render(fb, &self.app.view, &self.state, scroll_y);
         self.state.mark_clean();
     }
 
     /// Force a re-render
     pub fn invalidate(&mut self) {
         self.state.invalidate();
+    }
+
+    /// Measure total content height for the current view
+    pub fn content_height(&mut self, width: u32) -> u32 {
+        self.renderer.total_content_height(&self.app.view, &self.state, width)
     }
 
     /// Handle a click event at the given coordinates

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Abstract Syntax Tree definitions for Prism
 //!
 //! The AST represents the parsed structure of a .prism file.

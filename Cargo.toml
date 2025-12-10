@@ -13,6 +13,8 @@ softbuffer = "0.3.4"
 fontdue = "0.9"
 # HTTP client for networked Prism apps
 reqwest = { version = "0.11", default-features = false, features = ["blocking", "rustls-tls"] }
+resvg = "0.43.0"
+usvg = "0.43.0"
 
 [profile.release]
 opt-level = "z"     # Optimize for size

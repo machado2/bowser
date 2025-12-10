@@ -20,10 +20,11 @@ use fontdue::layout::{Layout, LayoutSettings, TextStyle, CoordinateSystem};
 use reqwest::blocking;
 use winit::{
     dpi::PhysicalSize,
-    event::{ElementState, Event, KeyboardInput, ModifiersState, MouseButton, VirtualKeyCode, WindowEvent},
+    event::{ElementState, Event, KeyboardInput, ModifiersState, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
+use winit::window::CursorIcon;
 use softbuffer::{Context, Surface};
 use std::num::NonZeroU32;
 use std::time::{Duration, Instant};
@@ -53,6 +54,8 @@ struct Browser {
     cursor_blink_timer: u32,
     cursor_visible: bool,
     last_error: Option<String>,
+    scroll_y: i32,
+    max_scroll_y: i32,
     base_dir: PathBuf,
 }
 
@@ -69,6 +72,8 @@ impl Browser {
             cursor_blink_timer: 0,
             cursor_visible: true,
             last_error: None,
+            scroll_y: 0,
+            max_scroll_y: 0,
             base_dir,
         }
     }
@@ -239,6 +244,8 @@ impl Browser {
         self.address_cursor = path_str.chars().count();
         self.runtime = Some(Runtime::new(app));
         self.last_error = None;
+        self.scroll_y = 0;
+        self.max_scroll_y = 0;
     }
 
     fn navigate_url(&mut self, url: &str, update_history: bool) {
@@ -322,6 +329,8 @@ impl Browser {
         self.address_cursor = url_str.chars().count();
         self.runtime = Some(Runtime::new(app));
         self.last_error = None;
+        self.scroll_y = 0;
+        self.max_scroll_y = 0;
     }
 
     fn can_go_back(&self) -> bool {
@@ -335,6 +344,11 @@ impl Browser {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    let mut layout_log = false;
+    let mut file_arg: Option<String> = None;
+    for a in args.iter().skip(1) {
+        if a == "--layout-log" { layout_log = true; } else if a.ends_with(".prism") { file_arg = Some(a.clone()); }
+    }
 
     // Determine base directory
     let exe_dir = std::env::current_exe()
@@ -345,6 +359,18 @@ fn main() {
 
     // Create browser
     let mut browser = Browser::new(base_dir.clone());
+
+    if layout_log {
+        let target = file_arg.unwrap_or_else(|| {
+            base_dir.join("examples").join("counter.prism").to_string_lossy().into()
+        });
+        let full_path = if target.starts_with('/') || target.contains(':') { std::path::PathBuf::from(&target) } else { base_dir.join(&target) };
+        let source = std::fs::read_to_string(&full_path).expect("Failed to read prism file");
+        let app = parser::parse(&source).expect("Failed to parse prism file");
+        let mut rt = Runtime::new(app);
+        rt.renderer.print_layout_report(&rt.app.view, &rt.state, DEFAULT_WIDTH as u32);
+        return;
+    }
 
     // Load initial page
     if args.len() >= 2 {
@@ -406,6 +432,22 @@ fn main() {
                 }
                 WindowEvent::CursorMoved { position, .. } => {
                     last_mouse_pos = Some((position.x as i32, position.y as i32));
+                    let (mx, my) = (position.x as i32, position.y as i32);
+                    let mut hand = false;
+                    if my < CHROME_HEIGHT as i32 {
+                        if (mx >= 10 && mx <= 38 && my >= 12 && my <= 40 && browser.can_go_back()) ||
+                           (mx >= 45 && mx <= 73 && my >= 12 && my <= 40 && browser.can_go_forward()) {
+                            hand = true;
+                        }
+                    } else if let Some(ref mut rt) = browser.runtime {
+                        let content_y = my - CHROME_HEIGHT as i32;
+                        if let Some(layout_box) = rt.renderer.hit_test(mx, content_y) {
+                            if layout_box.action.is_some() || layout_box.link_href.is_some() {
+                                hand = true;
+                            }
+                        }
+                    }
+                    window.set_cursor_icon(if hand { CursorIcon::Hand } else { CursorIcon::Default });
                 }
                 WindowEvent::MouseInput { state, button, .. } => {
                     if button == MouseButton::Left && state == ElementState::Pressed {
@@ -432,8 +474,24 @@ fn main() {
                         }
                     }
                 }
-                WindowEvent::MouseWheel { .. } => {
-                    // No scrolling support yet
+                WindowEvent::MouseWheel { delta, .. } => {
+                    if browser.runtime.is_some() {
+                        let scroll_delta = match delta {
+                            MouseScrollDelta::LineDelta(_, y) => (y * 40.0) as i32,
+                            MouseScrollDelta::PixelDelta(pos) => pos.y as i32,
+                        };
+                        let mut new_scroll = browser.scroll_y - scroll_delta;
+                        if new_scroll < 0 {
+                            new_scroll = 0;
+                        }
+                        if new_scroll > browser.max_scroll_y {
+                            new_scroll = browser.max_scroll_y;
+                        }
+                        if new_scroll != browser.scroll_y {
+                            browser.scroll_y = new_scroll;
+                            needs_redraw = true;
+                        }
+                    }
                 }
                 WindowEvent::KeyboardInput { input, .. } => {
                     if input.state == ElementState::Pressed {
@@ -487,15 +545,28 @@ fn render_browser(fb: &mut FrameBuffer, browser: &mut Browser) {
     draw_chrome(fb, browser);
 
     if let Some(ref mut rt) = browser.runtime {
-        let content_height = fb.height.saturating_sub(CHROME_HEIGHT);
-        let mut content_fb = FrameBuffer::new(fb.width, content_height);
-        rt.render(&mut content_fb);
-        for y in 0..content_height {
+        let viewport_height = fb.height.saturating_sub(CHROME_HEIGHT).max(1);
+        let mut content_fb = FrameBuffer::new(fb.width, viewport_height);
+
+        let full_height = rt.content_height(fb.width as u32) as i32;
+        browser.max_scroll_y = (full_height - viewport_height as i32).max(0);
+        if browser.scroll_y > browser.max_scroll_y {
+            browser.scroll_y = browser.max_scroll_y;
+        }
+        if browser.scroll_y < 0 {
+            browser.scroll_y = 0;
+        }
+
+        rt.render(&mut content_fb, browser.scroll_y);
+        for y in 0..viewport_height {
             let dst_start = (y + CHROME_HEIGHT) * fb.width;
             let src_start = y * fb.width;
             fb.pixels[dst_start..dst_start + fb.width]
                 .copy_from_slice(&content_fb.pixels[src_start..src_start + fb.width]);
         }
+
+        let effective_full_height = full_height.max(viewport_height as i32);
+        draw_scrollbar(fb, viewport_height, effective_full_height, browser.scroll_y, browser.max_scroll_y);
     } else if let Some(ref err) = browser.last_error {
         draw_error(fb, err);
     } else {
@@ -503,27 +574,63 @@ fn render_browser(fb: &mut FrameBuffer, browser: &mut Browser) {
     }
 }
 
+fn draw_scrollbar(fb: &mut FrameBuffer, viewport_height: usize, full_height: i32, scroll_y: i32, max_scroll_y: i32) {
+    if full_height <= viewport_height as i32 {
+        return;
+    }
+
+    let track_width = 8u32;
+    let track_x = fb.width as i32 - track_width as i32;
+    if track_x < 0 {
+        return;
+    }
+
+    let track_y = CHROME_HEIGHT as i32;
+    let track_height = viewport_height as u32;
+
+    fb.fill_rect(track_x, track_y, track_width, track_height, 0xF0F0F0);
+
+    let ratio = viewport_height as f32 / full_height as f32;
+    let min_thumb = 20u32;
+    let thumb_height = ((track_height as f32 * ratio) as u32).max(min_thumb).min(track_height);
+
+    let scroll_ratio = if max_scroll_y > 0 { scroll_y as f32 / max_scroll_y as f32 } else { 0.0 };
+    let movable = track_height.saturating_sub(thumb_height);
+    let thumb_offset = (movable as f32 * scroll_ratio) as u32;
+    let thumb_y = track_y + thumb_offset as i32;
+
+    fb.fill_rect(track_x, thumb_y, track_width, thumb_height, 0xC0C0C0);
+}
+
 fn draw_chrome(fb: &mut FrameBuffer, browser: &Browser) {
     let width = fb.width as u32;
-    fb.fill_rect(0, 0, width, CHROME_HEIGHT as u32, 0xF5F5F5);
+    fb.fill_rounded_rect_vertical_gradient(0, 0, width, CHROME_HEIGHT as u32, 0, 0xFBFCFE, 0xF3F5F8);
     fb.fill_rect(0, CHROME_HEIGHT as i32 - 1, width, 1, 0xDDDDDD);
 
     let back_color = if browser.can_go_back() { 0x333333 } else { 0x999999 };
-    fb.fill_rect(10, 12, 28, 28, 0xECECEC);
-    let btn_baseline = baseline_for_box(12, 28, 16.0);
-    draw_text_fb(fb, "<", 16, btn_baseline, 16.0, back_color);
+    fb.fill_rounded_rect_vertical_gradient(10, 12, 28, 28, 6, 0xEDEFF4, 0xD8DDE6);
+    {
+        let size = 16.0;
+        let base = baseline_for_box(12, 28, size);
+        let w = measure_text_width("‹", size);
+        let x = 12 + (28 - w) as i32 / 2;
+        draw_text_fb(fb, "‹", x, base, size, back_color);
+    }
 
     let fwd_color = if browser.can_go_forward() { 0x333333 } else { 0x999999 };
-    fb.fill_rect(45, 12, 28, 28, 0xECECEC);
-    draw_text_fb(fb, ">", 51, btn_baseline, 16.0, fwd_color);
+    fb.fill_rounded_rect_vertical_gradient(45, 12, 28, 28, 6, 0xEDEFF4, 0xD8DDE6);
+    {
+        let size = 16.0;
+        let base = baseline_for_box(12, 28, size);
+        let w = measure_text_width("›", size);
+        let x = 47 + (28 - w) as i32 / 2;
+        draw_text_fb(fb, "›", x, base, size, fwd_color);
+    }
 
-    fb.fill_rect(80, 12, 28, 28, 0xECECEC);
-    draw_text_fb(fb, "⌂", 86, btn_baseline, 16.0, 0x333333);
-
-    let addr_x = 120;
-    let addr_width = (width as i32 - 140).max(200) as u32;
+    let addr_x = 80 + 12;
+    let addr_width = (width as i32 - addr_x - 20).max(200) as u32;
     let border_color = if browser.address_focused { 0x4285F4 } else { 0xCCCCCC };
-    fb.fill_rect(addr_x, 10, addr_width, 32, 0xFFFFFF);
+    fb.fill_rounded_rect_vertical_gradient(addr_x, 10, addr_width, 32, 6, 0xFFFFFF, 0xF4F6F8);
     fb.draw_rect_outline(addr_x, 10, addr_width, 32, border_color, 1);
 
     let text_size = 14.0;
@@ -573,6 +680,8 @@ fn draw_welcome(fb: &mut FrameBuffer) {
     draw_text_fb(fb, "Open a .prism file to get started", cx - 120, base2, 14.0, 0x666666);
     draw_text_fb(fb, "or create examples/home.prism", cx - 110, base3, 14.0, 0x999999);
 }
+
+// removed legacy vector chevron helpers (now using font glyphs)
 
 fn draw_error(fb: &mut FrameBuffer, message: &str) {
     let cx = fb.width as i32 / 2;
@@ -687,17 +796,41 @@ fn handle_chrome_click(browser: &mut Browser, x: i32, _y: i32, _width: usize) {
         browser.go_forward();
         return;
     }
-    if x >= 80 && x < 108 {
+    let home_x = 80;
+    let home_width = 48i32;
+    if x >= home_x && x < home_x + home_width {
         let home = browser.base_dir.join("examples").join("home.prism");
         if home.exists() {
             browser.navigate(&home.to_string_lossy());
         }
         return;
     }
-    if x >= 120 {
+    let addr_x = home_x + home_width + 12;
+    let addr_width = (_width as i32 - addr_x - 20).max(200) as u32;
+    if x >= addr_x && x < addr_x + addr_width as i32 {
         browser.address_focused = true;
-        browser.address_cursor = browser.address_text.chars().count();
         browser.reset_cursor_blink();
+
+        let text_size = 14.0;
+        let text_x = addr_x + 10;
+        let rel_x = (x - text_x).max(0) as u32;
+
+        let mut cursor = 0usize;
+        let mut accumulated = String::new();
+        let mut prev_width = 0u32;
+        for (i, ch) in browser.address_text.chars().enumerate() {
+            accumulated.push(ch);
+            let w = measure_text_width(&accumulated, text_size);
+            let mid = (prev_width + w) / 2;
+            if rel_x < mid {
+                cursor = i;
+                break;
+            }
+            prev_width = w;
+            cursor = i + 1;
+        }
+
+        browser.address_cursor = cursor;
     }
 }
 

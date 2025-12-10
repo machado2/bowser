@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Reactive state management for Prism
 //!
 //! The state store holds all application state and tracks changes

@@ -1,0 +1,7 @@
+{
+  "projectId": "6f875a6b-047d-47d2-b047-b35715bb53d3",
+  "createdAt": 1765379883911,
+  "startupCommands": [
+    "cargo run"
+  ]
+}

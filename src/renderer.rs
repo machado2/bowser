@@ -8,6 +8,32 @@ use crate::state::StateStore;
 use fontdue::{Font, FontSettings};
 use fontdue::layout::{Layout, TextStyle, CoordinateSystem, LayoutSettings};
 
+fn lerp_color(c1: u32, c2: u32, t: f32) -> u32 {
+    let r1 = ((c1 >> 16) & 0xFF) as f32;
+    let g1 = ((c1 >> 8) & 0xFF) as f32;
+    let b1 = (c1 & 0xFF) as f32;
+    let r2 = ((c2 >> 16) & 0xFF) as f32;
+    let g2 = ((c2 >> 8) & 0xFF) as f32;
+    let b2 = (c2 & 0xFF) as f32;
+    let r = (r1 + (r2 - r1) * t).round() as u32;
+    let g = (g1 + (g2 - g1) * t).round() as u32;
+    let b = (b1 + (b2 - b1) * t).round() as u32;
+    (r << 16) | (g << 8) | b
+}
+
+fn mix_color(c1: u32, c2: u32, t: f32) -> u32 {
+    let r1 = ((c1 >> 16) & 0xFF) as f32;
+    let g1 = ((c1 >> 8) & 0xFF) as f32;
+    let b1 = (c1 & 0xFF) as f32;
+    let r2 = ((c2 >> 16) & 0xFF) as f32;
+    let g2 = ((c2 >> 8) & 0xFF) as f32;
+    let b2 = (c2 & 0xFF) as f32;
+    let r = (r1 + (r2 - r1) * t).round().clamp(0.0, 255.0) as u32;
+    let g = (g1 + (g2 - g1) * t).round().clamp(0.0, 255.0) as u32;
+    let b = (b1 + (b2 - b1) * t).round().clamp(0.0, 255.0) as u32;
+    (r << 16) | (g << 8) | b
+}
+
 /// Pixel buffer for rendering
 pub struct FrameBuffer {
     pub width: usize,
@@ -35,10 +61,19 @@ impl FrameBuffer {
     }
 
     pub fn fill_rect(&mut self, x: i32, y: i32, w: u32, h: u32, color: u32) {
-        let x_start = x.max(0) as usize;
-        let y_start = y.max(0) as usize;
-        let x_end = ((x + w as i32) as usize).min(self.width);
-        let y_end = ((y + h as i32) as usize).min(self.height);
+        let x0 = x;
+        let y0 = y;
+        let x1 = x + w as i32;
+        let y1 = y + h as i32;
+
+        if x1 <= 0 || y1 <= 0 || x0 >= self.width as i32 || y0 >= self.height as i32 {
+            return;
+        }
+
+        let x_start = x0.max(0) as usize;
+        let y_start = y0.max(0) as usize;
+        let x_end = x1.min(self.width as i32) as usize;
+        let y_end = y1.min(self.height as i32) as usize;
 
         for py in y_start..y_end {
             for px in x_start..x_end {
@@ -84,6 +119,53 @@ impl FrameBuffer {
 
         self.pixels[idx] = (r << 16) | (g << 8) | b;
     }
+
+    pub fn fill_rounded_rect_vertical_gradient(&mut self, x: i32, y: i32, w: u32, h: u32, radius: u32, top_color: u32, bottom_color: u32) {
+        if w == 0 || h == 0 {
+            return;
+        }
+
+        let x_min = 0i32;
+        let y_min = 0i32;
+        let x_max = self.width as i32 - 1;
+        let y_max = self.height as i32 - 1;
+
+        let x0 = x;
+        let y0 = y;
+        let x1 = x + w as i32 - 1; // inclusive
+        let y1 = y + h as i32 - 1; // inclusive
+
+        let r = (radius.min(w / 2).min(h / 2)) as i32;
+        for py in (y0.max(y_min))..=(y1.min(y_max)) {
+            let t = if h > 1 { ((py - y0) as f32 / (h as f32 - 1.0)).clamp(0.0, 1.0) } else { 0.0 };
+            let color = lerp_color(top_color, bottom_color, t);
+
+            let mut left = x0;
+            let mut right = x1;
+            if r > 0 {
+                if py < y0 + r {
+                    let dy = (y0 + r - py) as f32;
+                    let dx = ((r * r) as f32 - dy * dy).max(0.0).sqrt().floor() as i32;
+                    left = x0 + r - dx;
+                    right = x1 - r + dx;
+                } else if py > y1 - r {
+                    let dy = (py - (y1 - r)) as f32;
+                    let dx = ((r * r) as f32 - dy * dy).max(0.0).sqrt().floor() as i32;
+                    left = x0 + r - dx;
+                    right = x1 - r + dx;
+                }
+            }
+
+            let xs = left.max(x_min);
+            let xe = right.min(x_max);
+            if xe < xs {
+                continue;
+            }
+            for px in xs..=xe {
+                self.set_pixel(px as usize, py as usize, color);
+            }
+        }
+    }
 }
 
 /// Layout box for hit testing
@@ -106,6 +188,7 @@ pub struct Renderer {
     pub focused_input: Option<String>,
     pub cursor_visible: bool,
     cursor_blink_timer: u32,
+    pub log_enabled: bool,
 }
 
 impl Renderer {
@@ -124,6 +207,7 @@ impl Renderer {
             focused_input: None,
             cursor_visible: true,
             cursor_blink_timer: 0,
+            log_enabled: false,
         }
     }
 
@@ -145,18 +229,98 @@ impl Renderer {
         }
     }
 
-    pub fn render(&mut self, fb: &mut FrameBuffer, view: &ViewNode, state: &StateStore) {
+    pub fn render(&mut self, fb: &mut FrameBuffer, view: &ViewNode, state: &StateStore, scroll_y: i32) {
         fb.clear(0xFFFFFF);
         self.layout_boxes.clear();
         
         let ctx = RenderContext {
             x: 0,
-            y: 0,
+            y: -scroll_y,
             width: fb.width as u32,
             height: fb.height as u32,
         };
 
         self.render_node(fb, view, state, &ctx);
+    }
+
+    pub fn total_content_height(&mut self, view: &ViewNode, state: &StateStore, width: u32) -> u32 {
+        let (_, h) = self.measure_node(view, state, width);
+        h
+    }
+
+    pub fn print_layout_report(&mut self, view: &ViewNode, state: &StateStore, width: u32) {
+        self.log_enabled = true;
+        self.report_node(view, state, width, 0);
+    }
+
+    fn report_node(&mut self, node: &ViewNode, state: &StateStore, width_limit: u32, indent: usize) {
+        let (w, h) = self.measure_node(node, state, width_limit);
+        let name = match node.kind { 
+            NodeKind::Column => "Column",
+            NodeKind::Row => "Row",
+            NodeKind::Stack => "Stack",
+            NodeKind::Grid => "Grid",
+            NodeKind::Box => "Box",
+            NodeKind::Center => "Center",
+            NodeKind::Scroll => "Scroll",
+            NodeKind::Text => "Text",
+            NodeKind::Markdown => "Markdown",
+            NodeKind::Link => "Link",
+            NodeKind::Button => "Button",
+            NodeKind::Input => "Input",
+            NodeKind::TextArea => "TextArea",
+            NodeKind::Divider => "Divider",
+            NodeKind::Spacer => "Spacer",
+            NodeKind::Checkbox => "Checkbox",
+            NodeKind::Toggle => "Toggle",
+            NodeKind::Radio => "Radio",
+            NodeKind::Select => "Select",
+            NodeKind::Slider => "Slider",
+            NodeKind::Image => "Image",
+            NodeKind::Icon => "Icon",
+            NodeKind::Video => "Video",
+            NodeKind::Audio => "Audio",
+            NodeKind::Table => "Table",
+            NodeKind::List => "List",
+            NodeKind::Card => "Card",
+            NodeKind::Badge => "Badge",
+            NodeKind::Progress => "Progress",
+            NodeKind::Avatar => "Avatar",
+            NodeKind::Modal => "Modal",
+            NodeKind::Toast => "Toast",
+            NodeKind::Tooltip => "Tooltip",
+            NodeKind::Popover => "Popover",
+            NodeKind::Each => "Each",
+            NodeKind::If => "If",
+            NodeKind::Show => "Show",
+            NodeKind::Switch => "Switch",
+            NodeKind::Slot => "Slot",
+            NodeKind::Component(_) => "Component",
+        };
+        let prefix = " ".repeat(indent);
+        let extra = if let NodeKind::Button = node.kind { 
+            let content = self.get_string_prop(node, "content", state, "");
+            let tw = self.line_pixel_width(&content, 14.0).max(self.text_width(&content, 14.0));
+            format!(" content='{}' tw={}", content, tw)
+        } else if let NodeKind::Text = node.kind { 
+            let content = self.get_string_prop(node, "content", state, "");
+            format!(" content='{}'", content)
+        } else { String::new() };
+        println!("{}{} width_limit={} -> (w={}, h={}){}", prefix, name, width_limit, w, h, extra);
+
+        let child_limit = match node.kind {
+            NodeKind::Column | NodeKind::Box | NodeKind::Stack | NodeKind::Scroll => {
+                let padding = self.get_int_prop(node, "padding", state, 0) as u32;
+                width_limit.saturating_sub(padding * 2)
+            }
+            NodeKind::Row => width_limit,
+            NodeKind::Grid => width_limit,
+            _ => width_limit,
+        };
+        for child in &node.children {
+            if !self.is_visible(child, state) { continue; }
+            self.report_node(child, state, child_limit, indent + 2);
+        }
     }
 
     fn render_node(&mut self, fb: &mut FrameBuffer, node: &ViewNode, state: &StateStore, ctx: &RenderContext) {
@@ -352,8 +516,8 @@ impl Renderer {
     }
 
     fn render_row(&mut self, fb: &mut FrameBuffer, node: &ViewNode, state: &StateStore, ctx: &RenderContext, gap: u32) {
-        let mut x = ctx.x;
         let mut max_h = 0u32;
+        let mut total_w = 0u32;
 
         // Pre-measure children to layout naturally
         let mut measures: Vec<(u32, u32, &ViewNode)> = vec![];
@@ -363,8 +527,14 @@ impl Renderer {
             }
             let (w, h) = self.measure_node(child, state, ctx.width);
             max_h = max_h.max(h);
+            total_w += w;
             measures.push((w, h, child));
         }
+        if !measures.is_empty() {
+            total_w = total_w.saturating_add(gap * (measures.len() as u32 - 1));
+        }
+
+        let mut x = ctx.x + ((ctx.width as i32 - total_w as i32) / 2).max(0);
 
         for (w, h, child) in measures {
             let child_ctx = RenderContext {
@@ -388,35 +558,74 @@ impl Renderer {
         let color = self.get_color_prop(node, "color", Color::BLACK);
 
         let lines = self.wrap_text(&content, size, ctx.width);
-        let line_height = size as i32 + 6;
+        let (asc, desc, gap) = self.line_metrics(size);
+        let line_height = asc + desc + gap;
         let mut y = ctx.y;
         for line in lines {
-            self.draw_text(fb, &line, ctx.x, y, size, color.to_u32());
+            let baseline = self.baseline_in_box(y, line_height, size);
+            self.draw_text(fb, &line, ctx.x, baseline, size, color.to_u32());
             y += line_height;
         }
     }
 
     fn render_button(&mut self, fb: &mut FrameBuffer, node: &ViewNode, state: &StateStore, ctx: &RenderContext) {
         let content = self.get_string_prop(node, "content", state, "Button");
-        let bg = self.get_color_prop(node, "background", Color::LIGHT_GRAY);
         let color = self.get_color_prop(node, "color", Color::BLACK);
-
-        // Button dimensions
+        let bg = self.get_color_prop(node, "background", Color::LIGHT_GRAY);
         let btn_height = 36u32;
-        let btn_width = (content.len() as u32 * 10 + 24).min(ctx.width);
+        let text_size = 14.0;
+        let tw = self.line_pixel_width(&content, text_size).max(self.text_width(&content, text_size));
+        let mut btn_width = tw.saturating_add(24).max(36).min(ctx.width);
+        if content.chars().count() <= 2 { btn_width = 36; }
         let btn_x = ctx.x;
         let btn_y = ctx.y + (ctx.height as i32 - btn_height as i32) / 2;
 
-        // Draw button background
-        fb.fill_rect(btn_x, btn_y, btn_width, btn_height, bg.to_u32());
-        
-        // Draw border
-        fb.draw_rect_outline(btn_x, btn_y, btn_width, btn_height, 0x999999, 1);
+        let top = bg.to_u32();
+        let bottom = bg.to_u32();
+        fb.fill_rounded_rect_vertical_gradient(btn_x, btn_y, btn_width, btn_height, 10, top, bottom);
+        let top_hl = mix_color(top, 0xFFFFFF, 0.15);
+        let bot_sh = mix_color(bottom, 0x000000, 0.12);
+        fb.fill_rect(btn_x + 2, btn_y + 1, btn_width.saturating_sub(4), 1, top_hl);
+        fb.fill_rect(btn_x + 2, btn_y + btn_height as i32 - 2, btn_width.saturating_sub(4), 1, bot_sh);
 
-        // Draw text centered
-        let text_x = btn_x + 12;
-        let text_y = btn_y + 10;
-        self.draw_text(fb, &content, text_x, text_y, 14.0, color.to_u32());
+        if content.chars().count() <= 2 {
+            let size = 16.0;
+            let lines = self.wrap_text(&content, size, btn_width);
+            if let Some(line) = lines.first() {
+                self.layout.reset(&LayoutSettings::default());
+                self.layout.append(&[&self.font], &TextStyle::new(line, size, 0));
+                let mut min_x = f32::MAX;
+                let mut min_y = f32::MAX;
+                let mut max_x = f32::MIN;
+                let mut max_y = f32::MIN;
+                for g in self.layout.glyphs() {
+                    let (m, _) = self.font.rasterize_config(g.key);
+                    min_x = min_x.min(g.x);
+                    min_y = min_y.min(g.y);
+                    max_x = max_x.max(g.x + m.width as f32);
+                    max_y = max_y.max(g.y + m.height as f32);
+                }
+                let bw = (max_x - min_x).ceil() as i32;
+                let bh = (max_y - min_y).ceil() as i32;
+                let left = btn_x + (btn_width as i32 - bw) / 2;
+                let top = btn_y + (btn_height as i32 - bh) / 2;
+                for g in self.layout.glyphs() {
+                    let (m, bitmap) = self.font.rasterize_config(g.key);
+                    let gx = left + (g.x - min_x).round() as i32;
+                    let gy = top + (g.y - min_y).round() as i32;
+                    for (i, alpha) in bitmap.iter().enumerate() {
+                        if *alpha == 0 { continue; }
+                        let px = gx + (i % m.width) as i32;
+                        let py = gy + (i / m.width) as i32;
+                        if px >= 0 && py >= 0 { fb.blend_pixel(px as usize, py as usize, color.to_u32(), *alpha); }
+                    }
+                }
+            }
+        } else {
+            let text_x = btn_x + ((btn_width as i32 - tw as i32) / 2).max(0);
+            let text_y = self.baseline_in_box(btn_y, btn_height as i32, text_size);
+            self.draw_text(fb, &content, text_x, text_y, text_size, color.to_u32());
+        }
 
         // Register layout box for click handling
         if let Some(PropValue::Handler(action)) = node.props.get("on_click") {
@@ -536,8 +745,14 @@ impl Renderer {
 
     fn render_center(&mut self, fb: &mut FrameBuffer, node: &ViewNode, state: &StateStore, ctx: &RenderContext) {
         for child in &node.children {
-            // Center child in context - simplified, renders at center
-            self.render_node(fb, child, state, ctx);
+            let (cw, ch) = self.measure_node(child, state, ctx.width);
+            let centered = RenderContext {
+                x: ctx.x + ((ctx.width as i32 - cw as i32) / 2).max(0),
+                y: ctx.y,
+                width: cw.max(0),
+                height: ch.max(0),
+            };
+            self.render_node(fb, child, state, &centered);
         }
     }
 
@@ -561,15 +776,16 @@ impl Renderer {
         
         // Links rendered in blue
         let lines = self.wrap_text(&content, size, ctx.width);
-        let line_height = size as i32 + 6;
+        let (ascent, descent, gap) = self.line_metrics(size);
+        let line_height = ascent + descent + gap;
         let mut y = ctx.y;
         let mut max_w = 0u32;
         for line in &lines {
             let w = self.line_pixel_width(line, size).min(ctx.width);
             max_w = max_w.max(w);
-            self.draw_text(fb, line, ctx.x, y, size, 0x1976D2);
-            // underline for each line
-            fb.fill_rect(ctx.x, y + line_height - 4, w, 1, 0x1976D2);
+            let baseline = self.baseline_in_box(y, line_height, size);
+            self.draw_text(fb, line, ctx.x, baseline, size, 0x1976D2);
+            fb.fill_rect(ctx.x, baseline + 2, w, 1, 0x1976D2);
             y += line_height;
         }
         let link_height = (lines.len() as u32 * line_height as u32).max(16);
@@ -901,14 +1117,23 @@ impl Renderer {
     }
 
     fn draw_text(&mut self, fb: &mut FrameBuffer, text: &str, x: i32, y: i32, size: f32, color: u32) {
-        self.layout.reset(&LayoutSettings::default());
+        self.layout.reset(&LayoutSettings {
+            x: x as f32,
+            y: 0.0,
+            ..LayoutSettings::default()
+        });
         self.layout.append(&[&self.font], &TextStyle::new(text, size, 0));
+        let baseline_in_layout = self
+            .layout
+            .lines()
+            .and_then(|lines| lines.first().map(|l| l.baseline_y.round() as i32))
+            .unwrap_or(0);
+        let dy = y - baseline_in_layout;
 
         for glyph in self.layout.glyphs() {
             let (metrics, bitmap) = self.font.rasterize_config(glyph.key);
-            
-            let gx = x + glyph.x as i32;
-            let gy = y + glyph.y as i32;
+            let gx = glyph.x.round() as i32;
+            let gy = glyph.y.round() as i32 + dy;
 
             for (i, alpha) in bitmap.iter().enumerate() {
                 if *alpha == 0 {
@@ -916,7 +1141,6 @@ impl Renderer {
                 }
                 let px = gx + (i % metrics.width) as i32;
                 let py = gy + (i / metrics.width) as i32;
-                
                 if px >= 0 && py >= 0 {
                     fb.blend_pixel(px as usize, py as usize, color, *alpha);
                 }
@@ -1071,7 +1295,11 @@ impl Renderer {
             // Interactive nodes
             NodeKind::Button => {
                 let content = self.get_string_prop(node, "content", state, "Button");
-                let w = (content.len() as u32 * 10 + 24).min(width_limit);
+                let size = 14.0;
+                let base_w = self.text_width(&content, size);
+                let mut w = base_w.saturating_add(24).max(36).min(width_limit);
+                if content.chars().count() <= 2 { w = 36; }
+                if self.log_enabled { println!("measure Button content='{}' base_w={} limit={} -> w={}", content, base_w, width_limit, w); }
                 (w, 36)
             }
             NodeKind::Input => (width_limit.min(280), 36),
